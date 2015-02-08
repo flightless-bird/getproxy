@@ -1,6 +1,4 @@
-﻿
-
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 import urllib2,re,thread,time
 import socket
 socket.setdefaulttimeout(10)

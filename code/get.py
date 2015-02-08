@@ -11,11 +11,11 @@ import Queue
 import time
 
 
-pageNum = 5
+pageNum = 4
 threadNum = 2
 ipre = re.compile(r'<script>i0="(.*?)";')
 portre = re.compile(r'<script>var p1=(\d{1,}/\d{1,});')
-#lock = threading.Lock()
+lock = threading.Lock()
 workQueue = Queue.Queue(10)
 chkQueue = Queue.Queue(300)
 ipDict = {}
@@ -104,28 +104,29 @@ def getWeb(urlLink):
 	#print data
 	return data
 def findIp(data):
-	iplist = re.findall(ipre,data)
-	portlist = re.findall(portre,data)
+    global ipDict 
+    iplist = re.findall(ipre,data)
+    portlist = re.findall(portre,data)
 	
 	#################把接受到的字符计算更新
-	for i in range(len(portlist)):
-		sport = portlist[i]
-		spstr = sport.split('/')
+    for i in range(len(portlist)):
+        sport = portlist[i]
+        spstr = sport.split('/')
 	#    sToInt = int(spstr[0])/int(spstr[1])
 	#    portlist[i] = '%s' % sToInt
-		portlist[i] =str(int(spstr[0])/int(spstr[1]))
+        portlist[i] =str(int(spstr[0])/int(spstr[1]))
 	
 	##################
 	
 	####################处理ip字符
-	ipch = {
+    ipch = {
 			"k":"2",
 			"f":"1",
 			"j":"5"
 			}
-	for i in range(len(iplist)):
-		for p in ipch.keys():
-			iplist[i] = re.sub(p,ipch[p],iplist[i])
+    for i in range(len(iplist)):
+        for p in ipch.keys():
+            iplist[i] = re.sub(p,ipch[p],iplist[i])
 	
 	
 	
@@ -137,13 +138,14 @@ def findIp(data):
     # finally:
 		# lock.release()
 
-	ipport = dict(zip(iplist,portlist))
-	ipDict.update(ipport)
+    ipport = dict(zip(iplist,portlist))
+    ipDict.update(ipport)
 		# return ipport
 
 
 def chkProxy(Addr):
-    chProxySet = urllib2.ProxyHandler({'http':'http://%s' % Addr})
+    global ipDict 
+    chProxySet = urllib2.ProxyHandler({'http':'http://%s:%s' % (Addr,ipDict[Addr])})
     opener = urllib2.build_opener(chProxySet,urllib2.HTTPHandler)
     urllib2.install_opener(opener)
     r = urllib2.Request('http://www.haosou.com')
@@ -155,19 +157,21 @@ def chkProxy(Addr):
     while trycount <= 2:
         try:
             T0=time.time()
-            f=opener.open(r)
+            f=opener.open(url=r,timeout=100)
             da = f.read()
             if 'haosou' in da:
                 T=time.time() - T0
                 print 'the %s is useable use time is %s' % (Addr,str(T))
                 break
             else:
-                del ipDict[chAddr]
+                lock.acquire()
+                del ipDict[Addr]
+                lock.release()
         except:
             time.sleep(1)
             trycount = trycount + 1
-    if trycount > 2:
-        del ipDict[chAddr]
+    # if trycount > 2:
+        # del ipDict[Addr]
 
 
 
@@ -184,6 +188,7 @@ def chkProxy(Addr):
 #            del ipDict[chAddr]
 
 if __name__ == '__main__':
+    global ipDict 
     print 'begin....'
     for n in range(1,pageNum+1):
         urlitem = "http://www.haodailiip.com/guonei/%s" % n
@@ -194,8 +199,8 @@ if __name__ == '__main__':
     workQueue.join()
     print 'All for get Thread is ended,now start checking...'
     for chAddr in ipDict.keys():
-        ProxyAddr = chAddr+':'+ipDict[chAddr]
-        chkQueue.put(ProxyAddr)
+#        ProxyAddr = chAddr+':'+ipDict[chAddr]
+        chkQueue.put(chAddr)
     for x in range(threadNum+3):
         checkProxyInfo(chkQueue).start()
 

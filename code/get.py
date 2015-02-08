@@ -17,6 +17,7 @@ ipre = re.compile(r'<script>i0="(.*?)";')
 portre = re.compile(r'<script>var p1=(\d{1,}/\d{1,});')
 #lock = threading.Lock()
 workQueue = Queue.Queue(10)
+chkQueue = Queue.Queue(300)
 ipDict = {}
 
 class getProxyInfo(threading.Thread):
@@ -32,8 +33,26 @@ class getProxyInfo(threading.Thread):
 			print '%s now processing the url: %s' % (threading.current_thread().name,urlDot)
 			# ipDict = findIp(getWeb(urlDot))
 			findIp(getWeb(urlDot))
-			time.sleep(5)
+			time.sleep(1)
 			self.url.task_done()
+
+
+
+class checkProxyInfo(threading.Thread):
+    def __init__(self,addr):
+        threading.Thread.__init__(self)
+        self.addr=addr
+
+    def run(self):
+        while True:
+            if self.addr.empty():
+                break
+            checkAddr = self.addr.get()
+            print '%s now processing the: %s' % (threading.current_thread().name,checkAddr)
+            chkProxy(checkAddr)
+            self.addr.task_done()
+
+
 
 def getWeb(urlLink):
 	my_head = {
@@ -123,34 +142,32 @@ def findIp(data):
 		# return ipport
 
 
-def chkProxy():
-    for chAddr in ipDict.keys():
-        checkProxy = chAddr+':'+ipDict[chAddr]
-    	chProxySet = urllib2.ProxyHandler({'http':'http://%s' % checkProxy})
-    	opener = urllib2.build_opener(chProxySet,urllib2.HTTPHandler)
-    	urllib2.install_opener(opener)
-        r = urllib2.Request('http://www.haosou.com')
-        r.add_header("Accept-Language","utf-8")
-        r.add_header("User-Agent","Mozilla/5.0 (Windows NT 5.1; rv:35.0) Gecko/20100101 Firefox/35.0")
-        r.add_header("Content-Type","text/html; charset=utf-8")
+def chkProxy(Addr):
+    chProxySet = urllib2.ProxyHandler({'http':'http://%s' % Addr})
+    opener = urllib2.build_opener(chProxySet,urllib2.HTTPHandler)
+    urllib2.install_opener(opener)
+    r = urllib2.Request('http://www.haosou.com')
+    r.add_header("Accept-Language","utf-8")
+    r.add_header("User-Agent","Mozilla/5.0 (Windows NT 5.1; rv:35.0) Gecko/20100101 Firefox/35.0")
+    r.add_header("Content-Type","text/html; charset=utf-8")
         
-        trycount=1
-        while trycount <= 2:
-            try:
-               # T0=time.time()
-                f=opener.open(r)
-                da = f.read()
-                if 'haosou' in da:
-                   # T=time.time() - T0
-                    print 'the %s is useable' % checkProxy
-                    break
-                else:
-                    del ipDict[chAddr]
-            except:
-                time.sleep(1)
-                trycount = trycount + 1
-        if trycount > 2:
+    trycount=1
+    while trycount <= 2:
+        try:
+            T0=time.time()
+            f=opener.open(r)
+            da = f.read()
+            if 'haosou' in da:
+                T=time.time() - T0
+                print 'the %s is useable use time is %s' % (Addr,str(T))
+                break
+            else:
                 del ipDict[chAddr]
+        except:
+            time.sleep(1)
+            trycount = trycount + 1
+    if trycount > 2:
+        del ipDict[chAddr]
 
 
 
@@ -167,17 +184,22 @@ def chkProxy():
 #            del ipDict[chAddr]
 
 if __name__ == '__main__':
-	print 'begin....'
-	for n in range(1,pageNum+1):
-		urlitem = "http://www.haodailiip.com/guonei/%s" % n
-		workQueue.put(urlitem)
-	for x in range(threadNum):
-		getProxyInfo(workQueue).start()
+    print 'begin....'
+    for n in range(1,pageNum+1):
+        urlitem = "http://www.haodailiip.com/guonei/%s" % n
+        workQueue.put(urlitem)
+    for x in range(threadNum):
+        getProxyInfo(workQueue).start()
 
-	workQueue.join()
-	print 'All Thread is ended'
+    workQueue.join()
+    print 'All for get Thread is ended,now start checking...'
+    for chAddr in ipDict.keys():
+        ProxyAddr = chAddr+':'+ipDict[chAddr]
+        chkQueue.put(ProxyAddr)
+    for x in range(threadNum+3):
+        checkProxyInfo(chkQueue).start()
 
-	chkProxy()
+    chkQueue.join()
 	#print the Dict
 	# for i in ipDict:
 		# print i,ipDict[i]
@@ -185,12 +207,12 @@ if __name__ == '__main__':
 
 
 	#write log
-	logFile = open("proxy.log",'a')
-	for i in ipDict:
-		logFile.write(i+':'+ipDict[i]+'\r\n')	
+    logFile = open("proxy.log",'a')
+    for i in ipDict:
+        logFile.write(i+':'+ipDict[i]+'\r\n')	
 		# 记事本中只支持\r\n进行换行..
-	logFile.close()
-	print 'loging is ok. \nfile is proxy.log.'
+    logFile.close()
+    print 'loging is ok. \nfile is proxy.log.'
 
 
 

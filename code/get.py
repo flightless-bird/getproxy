@@ -15,11 +15,11 @@ pageNum = 5
 threadNum = 2
 ipre = re.compile(r'<script>i0="(.*?)";')
 portre = re.compile(r'<script>var p1=(\d{1,}/\d{1,});')
-lock = threading.Lock()
+#lock = threading.Lock()
 workQueue = Queue.Queue(10)
 ipDict = {}
 
-class MyThread(threading.Thread):
+class getProxyInfo(threading.Thread):
     def __init__(self,url):
         threading.Thread.__init__(self)
         self.url=url
@@ -94,7 +94,7 @@ def findIp(data):
 		spstr = sport.split('/')
 	#    sToInt = int(spstr[0])/int(spstr[1])
 	#    portlist[i] = '%s' % sToInt
-		portlist[i] =int(spstr[0])/int(spstr[1])
+		portlist[i] =str(int(spstr[0])/int(spstr[1]))
 	
 	##################
 	
@@ -123,18 +123,61 @@ def findIp(data):
 		# return ipport
 
 
+def chkProxy():
+    for chAddr in ipDict.keys():
+        checkProxy = chAddr+':'+ipDict[chAddr]
+    	chProxySet = urllib2.ProxyHandler({'http':'http://%s' % checkProxy})
+    	opener = urllib2.build_opener(chProxySet,urllib2.HTTPHandler)
+    	urllib2.install_opener(opener)
+        r = urllib2.Request('http://www.haosou.com')
+        r.add_header("Accept-Language","utf-8")
+        r.add_header("User-Agent","Mozilla/5.0 (Windows NT 5.1; rv:35.0) Gecko/20100101 Firefox/35.0")
+        r.add_header("Content-Type","text/html; charset=utf-8")
+        
+        trycount=1
+        while trycount <= 2:
+            try:
+               # T0=time.time()
+                f=opener.open(r)
+                da = f.read()
+                if 'haosou' in da:
+                   # T=time.time() - T0
+                    print 'the %s is useable' % checkProxy
+                    break
+                else:
+                    del ipDict[chAddr]
+            except:
+                time.sleep(1)
+                trycount = trycount + 1
+        if trycount > 2:
+                del ipDict[chAddr]
+
+
+
+
+
+
+
+
+
+#    	htm = urllib2.urlopen(r)
+#        if html.getcode() is '200':
+#            print 'the %s is useable' % checkProxy
+#        else:
+#            del ipDict[chAddr]
+
 if __name__ == '__main__':
 	print 'begin....'
 	for n in range(1,pageNum+1):
 		urlitem = "http://www.haodailiip.com/guonei/%s" % n
 		workQueue.put(urlitem)
 	for x in range(threadNum):
-		MyThread(workQueue).start()
+		getProxyInfo(workQueue).start()
 
 	workQueue.join()
 	print 'All Thread is ended'
 
-	
+	chkProxy()
 	#print the Dict
 	# for i in ipDict:
 		# print i,ipDict[i]
@@ -144,7 +187,7 @@ if __name__ == '__main__':
 	#write log
 	logFile = open("proxy.log",'a')
 	for i in ipDict:
-		logFile.write(i+':'+str(ipDict[i])+'\r\n')	
+		logFile.write(i+':'+ipDict[i]+'\r\n')	
 		# 记事本中只支持\r\n进行换行..
 	logFile.close()
 	print 'loging is ok. \nfile is proxy.log.'
